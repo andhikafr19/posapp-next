@@ -1,0 +1,299 @@
+'use client';
+
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { Product, CartItem, Cart, Transaction, PaymentData } from '@/types/pos';
+import { mockProducts } from '@/data/products';
+
+// Action types untuk cart reducer
+type CartAction =
+  | { type: 'ADD_ITEM'; payload: Product }
+  | { type: 'REMOVE_ITEM'; payload: string }
+  | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
+  | { type: 'CLEAR_CART' }
+  | { type: 'COMPLETE_TRANSACTION'; payload: { paymentData: PaymentData; transaction: Transaction } }
+  | { type: 'UPDATE_PRODUCT_STOCK'; payload: { productId: string; newStock: number } };
+
+// Interface untuk Cart Context
+interface CartContextType {
+  cart: Cart;
+  transactions: Transaction[];
+  products: Product[];
+  addToCart: (product: Product) => boolean; // Returns false if insufficient stock
+  removeFromCart: (productId: string) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  clearCart: () => void;
+  getItemCount: () => number;
+  completeTransaction: (paymentData: PaymentData) => Transaction;
+  clearTransactionHistory: () => void;
+  getProductById: (productId: string) => Product | undefined;
+  isLowStock: (productId: string, threshold?: number) => boolean;
+}
+
+// Initial state untuk cart dan transactions
+interface AppState {
+  cart: Cart;
+  transactions: Transaction[];
+  products: Product[];
+}
+
+const initialState: AppState = {
+  cart: {
+    items: [],
+    total: 0
+  },
+  transactions: [],
+  products: [...mockProducts] // Clone the mock products to manage inventory
+};
+
+// Generate receipt number
+const generateReceiptNumber = (): string => {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const time = now.toTimeString().slice(0, 8).replace(/:/g, '');
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `${date}${time}${random}`;
+};
+
+// App reducer untuk mengelola state cart dan transactions
+const appReducer = (state: AppState, action: CartAction): AppState => {
+  switch (action.type) {    case 'ADD_ITEM': {
+      // Check stock availability in reducer as well (defensive programming)
+      const currentProduct = state.products.find(p => p.id === action.payload.id);
+      if (!currentProduct || currentProduct.stock === undefined || currentProduct.stock === 0) {
+        return state; // Don't add if no stock
+      }
+
+      const existingItem = state.cart.items.find(
+        item => item.product.id === action.payload.id
+      );
+
+      const currentCartQuantity = existingItem ? existingItem.quantity : 0;
+      
+      // Check if adding one more would exceed stock
+      if (currentCartQuantity >= currentProduct.stock) {
+        return state; // Don't add if would exceed stock
+      }
+
+      let newItems: CartItem[];
+      
+      if (existingItem) {
+        // Jika item sudah ada, tambah quantity
+        newItems = state.cart.items.map(item =>
+          item.product.id === action.payload.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      } else {
+        // Jika item belum ada, tambah item baru
+        newItems = [...state.cart.items, { product: action.payload, quantity: 1 }];
+      }
+
+      const total = newItems.reduce(
+        (sum, item) => sum + (item.product.price * item.quantity),
+        0
+      );
+
+      return { 
+        ...state, 
+        cart: { items: newItems, total } 
+      };
+    }
+
+    case 'REMOVE_ITEM': {
+      const newItems = state.cart.items.filter(
+        item => item.product.id !== action.payload
+      );
+      
+      const total = newItems.reduce(
+        (sum, item) => sum + (item.product.price * item.quantity),
+        0
+      );
+
+      return { 
+        ...state, 
+        cart: { items: newItems, total } 
+      };
+    }    case 'UPDATE_QUANTITY': {
+      const { productId, quantity } = action.payload;
+      
+      if (quantity <= 0) {
+        // Jika quantity 0 atau negatif, hapus item
+        return appReducer(state, { type: 'REMOVE_ITEM', payload: productId });
+      }
+
+      // Check stock availability
+      const currentProduct = state.products.find(p => p.id === productId);
+      if (!currentProduct || currentProduct.stock === undefined || quantity > currentProduct.stock) {
+        return state; // Don't update if quantity exceeds available stock
+      }
+
+      const newItems = state.cart.items.map(item =>
+        item.product.id === productId
+          ? { ...item, quantity }
+          : item
+      );
+
+      const total = newItems.reduce(
+        (sum, item) => sum + (item.product.price * item.quantity),
+        0
+      );
+
+      return { 
+        ...state, 
+        cart: { items: newItems, total } 
+      };
+    }
+
+    case 'CLEAR_CART':
+      return { 
+        ...state, 
+        cart: { items: [], total: 0 } 
+      };    case 'COMPLETE_TRANSACTION': {
+      const newTransaction = action.payload.transaction;
+        // Update stock for all items in the transaction
+      const updatedProducts = state.products.map(product => {
+        const soldItem = newTransaction.items.find(item => item.product.id === product.id);
+        if (soldItem && product.stock !== undefined) {
+          return {
+            ...product,
+            stock: Math.max(0, product.stock - soldItem.quantity)
+          };
+        }
+        return product;
+      });
+
+      return {
+        cart: { items: [], total: 0 }, // Clear cart
+        transactions: [...state.transactions, newTransaction],
+        products: updatedProducts
+      };
+    }
+
+    case 'UPDATE_PRODUCT_STOCK': {
+      const { productId, newStock } = action.payload;
+      const updatedProducts = state.products.map(product =>
+        product.id === productId
+          ? { ...product, stock: Math.max(0, newStock) }
+          : product
+      );
+
+      return {
+        ...state,
+        products: updatedProducts
+      };
+    }
+
+    default:
+      return state;
+  }
+};
+
+// Create Context
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+// Cart Provider Component
+interface CartProviderProps {
+  children: ReactNode;
+}
+
+export const CartProvider = ({ children }: CartProviderProps) => {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+  const addToCart = (product: Product): boolean => {
+    // Check stock availability
+    const currentProduct = state.products.find(p => p.id === product.id);
+    if (!currentProduct || currentProduct.stock === undefined || currentProduct.stock === 0) {
+      return false; // No stock available
+    }
+
+    const existingCartItem = state.cart.items.find(
+      item => item.product.id === product.id
+    );
+    const currentCartQuantity = existingCartItem ? existingCartItem.quantity : 0;
+    
+    // Check if adding one more would exceed stock
+    if (currentCartQuantity >= currentProduct.stock) {
+      return false; // Would exceed available stock
+    }
+
+    dispatch({ type: 'ADD_ITEM', payload: product });
+    return true; // Successfully added
+  };
+
+  const removeFromCart = (productId: string) => {
+    dispatch({ type: 'REMOVE_ITEM', payload: productId });
+  };
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    dispatch({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
+  };
+
+  const clearCart = () => {
+    dispatch({ type: 'CLEAR_CART' });
+  };
+
+  const getItemCount = () => {
+    return state.cart.items.reduce((count: number, item: CartItem) => count + item.quantity, 0);
+  };
+
+  const completeTransaction = (paymentData: PaymentData): Transaction => {
+    const transaction: Transaction = {
+      id: crypto.randomUUID(),
+      items: [...state.cart.items],
+      total: paymentData.total,
+      amountPaid: paymentData.amountPaid,
+      change: paymentData.change,
+      paymentMethod: 'cash',
+      timestamp: new Date(),
+      receiptNumber: generateReceiptNumber()
+    };
+
+    dispatch({ 
+      type: 'COMPLETE_TRANSACTION', 
+      payload: { paymentData, transaction } 
+    });
+
+    return transaction;
+  };
+  const clearTransactionHistory = () => {
+    // For now, we'll implement this later if needed
+    // Could add a new action type for this
+  };
+
+  const getProductById = (productId: string): Product | undefined => {
+    return state.products.find(product => product.id === productId);
+  };
+
+  const isLowStock = (productId: string, threshold: number = 5): boolean => {
+    const product = getProductById(productId);
+    if (!product || product.stock === undefined) return false;
+    return product.stock <= threshold && product.stock > 0;
+  };  const contextValue = {
+    cart: state.cart,
+    transactions: state.transactions,
+    products: state.products,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    getItemCount,
+    completeTransaction,
+    clearTransactionHistory,
+    getProductById,
+    isLowStock
+  };
+
+  return (
+    <CartContext.Provider value={contextValue}>
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+// Hook untuk menggunakan Cart Context
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (context === undefined) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+};
