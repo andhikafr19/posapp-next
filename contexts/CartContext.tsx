@@ -1,8 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { Product, CartItem, Cart, Transaction, PaymentData } from '@/types/pos';
 import { mockProducts } from '@/data/products';
+import { 
+  saveProductsToStorage, 
+  loadProductsFromStorage,
+  saveTransactionsToStorage,
+  loadTransactionsFromStorage 
+} from '@/utils/storage';
 
 // Action types untuk cart reducer
 type CartAction =
@@ -11,7 +17,9 @@ type CartAction =
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'CLEAR_CART' }
   | { type: 'COMPLETE_TRANSACTION'; payload: { paymentData: PaymentData; transaction: Transaction } }
-  | { type: 'UPDATE_PRODUCT_STOCK'; payload: { productId: string; newStock: number } };
+  | { type: 'UPDATE_PRODUCT_STOCK'; payload: { productId: string; newStock: number } }
+  | { type: 'HYDRATE_PRODUCTS'; payload: Product[] }
+  | { type: 'HYDRATE_TRANSACTIONS'; payload: Transaction[] };
 
 // Interface untuk Cart Context
 interface CartContextType {
@@ -37,12 +45,9 @@ interface AppState {
 }
 
 const initialState: AppState = {
-  cart: {
-    items: [],
-    total: 0
-  },
+  cart: { items: [], total: 0 },
   transactions: [],
-  products: [...mockProducts] // Clone the mock products to manage inventory
+  products: [...mockProducts] // Start with mock data, will be hydrated from localStorage
 };
 
 // Generate receipt number
@@ -175,11 +180,23 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
         product.id === productId
           ? { ...product, stock: Math.max(0, newStock) }
           : product
-      );
-
-      return {
+      );      return {
         ...state,
         products: updatedProducts
+      };
+    }
+
+    case 'HYDRATE_PRODUCTS': {
+      return {
+        ...state,
+        products: action.payload
+      };
+    }
+
+    case 'HYDRATE_TRANSACTIONS': {
+      return {
+        ...state,
+        transactions: action.payload
       };
     }
 
@@ -198,6 +215,42 @@ interface CartProviderProps {
 
 export const CartProvider = ({ children }: CartProviderProps) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const [isHydrated, setIsHydrated] = React.useState(false);
+
+  // Load data from localStorage after component mounts (client-side only)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedProducts = loadProductsFromStorage();
+      const storedTransactions = loadTransactionsFromStorage();
+      
+      // Update state with stored data if available
+      if (storedProducts) {
+        dispatch({ type: 'HYDRATE_PRODUCTS', payload: storedProducts });
+      }
+      if (storedTransactions && storedTransactions.length > 0) {
+        dispatch({ type: 'HYDRATE_TRANSACTIONS', payload: storedTransactions });
+      }
+      
+      setIsHydrated(true);
+    } catch (error) {
+      console.error('Failed to load data from localStorage:', error);
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // Effect to save data to localStorage when state changes (only after hydration)
+  useEffect(() => {
+    if (!isHydrated || typeof window === 'undefined') return;
+
+    try {
+      saveProductsToStorage(state.products);
+      saveTransactionsToStorage(state.transactions);
+    } catch (error) {
+      console.error('Failed to save state to localStorage:', error);
+    }
+  }, [state.products, state.transactions, isHydrated]);
   const addToCart = (product: Product): boolean => {
     // Check stock availability
     const currentProduct = state.products.find(p => p.id === product.id);

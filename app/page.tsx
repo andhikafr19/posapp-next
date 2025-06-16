@@ -4,15 +4,21 @@ import React from 'react';
 import ProductGrid from '@/components/ProductGrid';
 import Cart from '@/components/Cart';
 import TransactionHistory from '@/components/TransactionHistory';
+import { DataManagement } from '@/components/DataManagement';
 import { useCart } from '@/contexts/CartContext';
 
 export default function POSPage() {
   const { getItemCount, transactions } = useCart();
-  const [activeTab, setActiveTab] = React.useState<'pos' | 'history'>('pos');
+  const [activeTab, setActiveTab] = React.useState<'pos' | 'history' | 'data'>('pos');
   const itemCount = getItemCount();
 
   // Hitung total penjualan hari ini
   const todayTotal = transactions.reduce((sum, transaction) => sum + transaction.total, 0);
+
+  // Handle data imported - refresh the page to reload data from localStorage
+  const handleDataImported = () => {
+    window.location.reload();
+  };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -86,12 +92,32 @@ export default function POSPage() {
               >
                 📊 Riwayat Transaksi ({transactions.length})
               </button>
+              <button
+                onClick={() => setActiveTab('data')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'data'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📁 Data Management
+              </button>
+              <button
+                onClick={() => setActiveTab('data')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'data'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                💾 Data Management
+              </button>
             </nav>
           </div>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'pos' ? (
+        {activeTab === 'pos' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Products Section - Takes 2/3 of the width on large screens */}
             <div className="lg:col-span-2">
@@ -105,9 +131,17 @@ export default function POSPage() {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+        
+        {activeTab === 'history' && (
           <div className="max-w-4xl mx-auto">
             <TransactionHistory transactions={transactions} />
+          </div>
+        )}
+        
+        {activeTab === 'data' && (
+          <div className="max-w-2xl mx-auto">
+            <DataManagement onDataImported={handleDataImported} />
           </div>
         )}
       </main>
