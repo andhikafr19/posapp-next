@@ -8,7 +8,7 @@ export const mockProducts: Product[] = [
     price: 15000,
     description: 'Nasi gudeg khas Yogyakarta dengan ayam',
     category: 'Makanan',
-    stock: 20
+    stock: 30
   },
   {
     id: '2',

@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { exportDataToJSON, importDataFromJSON } from '@/utils/storage';
+import { DebugStorage } from './DebugStorage';
 
 interface DataManagementProps {
   onDataImported?: () => void;
@@ -88,10 +89,12 @@ export const DataManagement: React.FC<DataManagementProps> = ({ onDataImported }
           <ul className="mt-1 list-disc list-inside">
             <li>Export secara berkala untuk backup data</li>
             <li>File backup berformat JSON</li>
-            <li>Import akan mengganti semua data yang ada</li>
-          </ul>
+            <li>Import akan mengganti semua data yang ada</li>          </ul>
         </div>
       </div>
+
+      {/* Debug Tools */}
+      <DebugStorage />
     </div>
   );
 };

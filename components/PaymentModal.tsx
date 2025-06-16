@@ -90,65 +90,62 @@ const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalP
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6">          
           {/* Total Amount */}
-          <div className="text-center bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Total Belanja:</p>
-            <p className="text-2xl font-bold text-gray-800">
+          <div className="text-center bg-blue-50 border border-blue-200 p-4 rounded-lg">
+            <p className="text-sm font-medium text-blue-700 mb-1">Total Belanja:</p>
+            <p className="text-3xl font-bold text-blue-900">
               {formatPrice(totalAmount)}
             </p>
-          </div>
-
+          </div>          
           {/* Quick Amount Buttons */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">
-              Nominal Cepat:
+            <p className="text-sm font-medium text-gray-800 mb-3">
+              💡 Nominal Cepat:
             </p>
             <div className="grid grid-cols-2 gap-2">
               {quickAmounts.map((amount) => (
                 <button
                   key={amount}
                   onClick={() => setAmountPaid(amount.toString())}
-                  className="p-2 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+                  className="p-3 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   {formatPrice(amount)}
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Amount Paid Input */}
+          </div>{/* Amount Paid Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="amount-paid" className="block text-sm font-medium text-gray-700 mb-2">
               Uang Diterima:
             </label>
             <input
+              id="amount-paid"
               type="text"
               value={amountPaid}
               onChange={(e) => handleAmountChange(e.target.value)}
-              placeholder="0"
-              className="w-full px-4 py-3 text-lg border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Masukkan nominal uang..."
+              className="w-full px-4 py-3 text-lg text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               autoFocus
             />
             {amountPaid && (
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-gray-700 font-medium">
                 {formatPrice(parseFloat(amountPaid) || 0)}
               </p>
             )}
           </div>
-
           {/* Change Calculation */}
           {amountPaid && (
-            <div className={`p-4 rounded-lg ${
+            <div className={`p-4 rounded-lg border-2 ${
               isPaymentSufficient() 
-                ? 'bg-green-50 border border-green-200' 
-                : 'bg-red-50 border border-red-200'
+                ? 'bg-green-50 border-green-300' 
+                : 'bg-red-50 border-red-300'
             }`}>
-              <p className="text-sm font-medium mb-1">
+              <p className="text-sm font-semibold mb-2 text-gray-800">
                 {isPaymentSufficient() ? '✅ Kembalian:' : '❌ Uang Kurang:'}
               </p>
-              <p className={`text-xl font-bold ${
-                isPaymentSufficient() ? 'text-green-600' : 'text-red-600'
+              <p className={`text-2xl font-bold ${
+                isPaymentSufficient() ? 'text-green-700' : 'text-red-700'
               }`}>
                 {formatPrice(isPaymentSufficient() ? change : Math.abs(change))}
               </p>

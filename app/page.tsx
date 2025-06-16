@@ -5,15 +5,36 @@ import ProductGrid from '@/components/ProductGrid';
 import Cart from '@/components/Cart';
 import TransactionHistory from '@/components/TransactionHistory';
 import { DataManagement } from '@/components/DataManagement';
+import ProductManagement from '@/components/ProductManagement';
 import { useCart } from '@/contexts/CartContext';
 
 export default function POSPage() {
   const { getItemCount, transactions } = useCart();
-  const [activeTab, setActiveTab] = React.useState<'pos' | 'history' | 'data'>('pos');
+  const [activeTab, setActiveTab] = React.useState<'pos' | 'products' | 'history' | 'data'>('pos');
   const itemCount = getItemCount();
 
-  // Hitung total penjualan hari ini
-  const todayTotal = transactions.reduce((sum, transaction) => sum + transaction.total, 0);
+  // Function untuk check apakah transaksi adalah hari ini
+  const isToday = (date: Date | string) => {
+    try {
+      const transactionDate = typeof date === 'string' ? new Date(date) : date;
+      const today = new Date();
+      
+      return (
+        transactionDate.getDate() === today.getDate() &&
+        transactionDate.getMonth() === today.getMonth() &&
+        transactionDate.getFullYear() === today.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Filter transaksi hari ini saja
+  const todayTransactions = transactions.filter(transaction => isToday(transaction.timestamp));
+  
+  // Hitung total penjualan hari ini (hanya dari transaksi hari ini)
+  const todayTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.total, 0);
+  const todayCount = todayTransactions.length;
 
   // Handle data imported - refresh the page to reload data from localStorage
   const handleDataImported = () => {
@@ -54,9 +75,12 @@ export default function POSPage() {
                 <span className="ml-1 font-semibold text-green-600">
                   {formatPrice(todayTotal)}
                 </span>
+                <span className="ml-1 text-xs text-gray-500">
+                  ({todayCount} trans)
+                </span>
               </div>
               <div className="text-sm text-gray-600">
-                Transactions:{' '}
+                Total transactions:{' '}
                 <span className="ml-1 font-semibold text-purple-600">
                   {transactions.length}
                 </span>
@@ -83,6 +107,16 @@ export default function POSPage() {
                 🏪 Point of Sale
               </button>
               <button
+                onClick={() => setActiveTab('products')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'products'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📦 Manajemen Produk
+              </button>
+              <button
                 onClick={() => setActiveTab('history')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'history'
@@ -91,16 +125,6 @@ export default function POSPage() {
                 }`}
               >
                 📊 Riwayat Transaksi ({transactions.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('data')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'data'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                📁 Data Management
               </button>
               <button
                 onClick={() => setActiveTab('data')}
@@ -132,6 +156,12 @@ export default function POSPage() {
             </div>
           </div>
         )}
+
+        {activeTab === 'products' && (
+          <div className="max-w-6xl mx-auto">
+            <ProductManagement />
+          </div>
+        )}
         
         {activeTab === 'history' && (
           <div className="max-w-4xl mx-auto">
@@ -150,7 +180,7 @@ export default function POSPage() {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-gray-500 text-sm">
-            <p>© 2025 POS App - Aplikasi Point of Sale dengan Next.js</p>
+            <p>© 2025 POS App - Aplikasi Point of Sale</p>
           </div>
         </div>
       </footer>

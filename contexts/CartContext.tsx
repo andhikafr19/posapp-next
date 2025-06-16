@@ -18,6 +18,9 @@ type CartAction =
   | { type: 'CLEAR_CART' }
   | { type: 'COMPLETE_TRANSACTION'; payload: { paymentData: PaymentData; transaction: Transaction } }
   | { type: 'UPDATE_PRODUCT_STOCK'; payload: { productId: string; newStock: number } }
+  | { type: 'UPDATE_PRODUCT'; payload: Product }
+  | { type: 'ADD_PRODUCT'; payload: Product }
+  | { type: 'DELETE_PRODUCT'; payload: string }
   | { type: 'HYDRATE_PRODUCTS'; payload: Product[] }
   | { type: 'HYDRATE_TRANSACTIONS'; payload: Transaction[] };
 
@@ -35,6 +38,11 @@ interface CartContextType {
   clearTransactionHistory: () => void;
   getProductById: (productId: string) => Product | undefined;
   isLowStock: (productId: string, threshold?: number) => boolean;
+  // Product management functions
+  updateProduct: (product: Product) => void;
+  addProduct: (product: Product) => void;
+  deleteProduct: (productId: string) => void;
+  updateProductStock: (productId: string, newStock: number) => void;
 }
 
 // Initial state untuk cart dan transactions
@@ -61,10 +69,9 @@ const generateReceiptNumber = (): string => {
 
 // App reducer untuk mengelola state cart dan transactions
 const appReducer = (state: AppState, action: CartAction): AppState => {
-  switch (action.type) {    case 'ADD_ITEM': {
-      // Check stock availability in reducer as well (defensive programming)
+  switch (action.type) {    case 'ADD_ITEM': {      // Check stock availability in reducer as well (defensive programming)
       const currentProduct = state.products.find(p => p.id === action.payload.id);
-      if (!currentProduct || currentProduct.stock === undefined || currentProduct.stock === 0) {
+      if (!currentProduct?.stock || currentProduct.stock === 0) {
         return state; // Don't add if no stock
       }
 
@@ -124,11 +131,9 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
       if (quantity <= 0) {
         // Jika quantity 0 atau negatif, hapus item
         return appReducer(state, { type: 'REMOVE_ITEM', payload: productId });
-      }
-
-      // Check stock availability
+      }      // Check stock availability
       const currentProduct = state.products.find(p => p.id === productId);
-      if (!currentProduct || currentProduct.stock === undefined || quantity > currentProduct.stock) {
+      if (!currentProduct?.stock || quantity > currentProduct.stock) {
         return state; // Don't update if quantity exceeds available stock
       }
 
@@ -172,9 +177,7 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
         transactions: [...state.transactions, newTransaction],
         products: updatedProducts
       };
-    }
-
-    case 'UPDATE_PRODUCT_STOCK': {
+    }    case 'UPDATE_PRODUCT_STOCK': {
       const { productId, newStock } = action.payload;
       const updatedProducts = state.products.map(product =>
         product.id === productId
@@ -183,6 +186,44 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
       );      return {
         ...state,
         products: updatedProducts
+      };
+    }
+
+    case 'UPDATE_PRODUCT': {
+      const updatedProducts = state.products.map(product =>
+        product.id === action.payload.id
+          ? { ...action.payload }
+          : product
+      );
+      return {
+        ...state,
+        products: updatedProducts
+      };
+    }
+
+    case 'ADD_PRODUCT': {
+      return {
+        ...state,
+        products: [...state.products, action.payload]
+      };
+    }
+
+    case 'DELETE_PRODUCT': {
+      const filteredProducts = state.products.filter(
+        product => product.id !== action.payload
+      );
+      // Also remove from cart if exists
+      const filteredCartItems = state.cart.items.filter(
+        item => item.product.id !== action.payload
+      );
+      const newTotal = filteredCartItems.reduce(
+        (sum, item) => sum + (item.product.price * item.quantity),
+        0
+      );
+      return {
+        ...state,
+        products: filteredProducts,
+        cart: { items: filteredCartItems, total: newTotal }
       };
     }
 
@@ -250,11 +291,10 @@ export const CartProvider = ({ children }: CartProviderProps) => {
     } catch (error) {
       console.error('Failed to save state to localStorage:', error);
     }
-  }, [state.products, state.transactions, isHydrated]);
-  const addToCart = (product: Product): boolean => {
+  }, [state.products, state.transactions, isHydrated]);  const addToCart = (product: Product): boolean => {
     // Check stock availability
     const currentProduct = state.products.find(p => p.id === product.id);
-    if (!currentProduct || currentProduct.stock === undefined || currentProduct.stock === 0) {
+    if (!currentProduct?.stock || currentProduct.stock === 0) {
       return false; // No stock available
     }
 
@@ -314,12 +354,27 @@ export const CartProvider = ({ children }: CartProviderProps) => {
 
   const getProductById = (productId: string): Product | undefined => {
     return state.products.find(product => product.id === productId);
+  };  const isLowStock = (productId: string, threshold: number = 5): boolean => {
+    const product = getProductById(productId);
+    if (!product?.stock) return false;
+    return product.stock <= threshold && product.stock > 0;
   };
 
-  const isLowStock = (productId: string, threshold: number = 5): boolean => {
-    const product = getProductById(productId);
-    if (!product || product.stock === undefined) return false;
-    return product.stock <= threshold && product.stock > 0;
+  // Product management functions
+  const updateProduct = (product: Product) => {
+    dispatch({ type: 'UPDATE_PRODUCT', payload: product });
+  };
+
+  const addProduct = (product: Product) => {
+    dispatch({ type: 'ADD_PRODUCT', payload: product });
+  };
+
+  const deleteProduct = (productId: string) => {
+    dispatch({ type: 'DELETE_PRODUCT', payload: productId });
+  };
+
+  const updateProductStock = (productId: string, newStock: number) => {
+    dispatch({ type: 'UPDATE_PRODUCT_STOCK', payload: { productId, newStock } });
   };  const contextValue = {
     cart: state.cart,
     transactions: state.transactions,
@@ -332,7 +387,11 @@ export const CartProvider = ({ children }: CartProviderProps) => {
     completeTransaction,
     clearTransactionHistory,
     getProductById,
-    isLowStock
+    isLowStock,
+    updateProduct,
+    addProduct,
+    deleteProduct,
+    updateProductStock
   };
 
   return (
