@@ -51,7 +51,15 @@ export const saveTransactionsToStorage = (transactions: Transaction[]) => {
 export const loadTransactionsFromStorage = (): Transaction[] => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    
+    const transactions = JSON.parse(stored) as Array<Omit<Transaction, 'timestamp'> & { timestamp: string }>;
+    
+    // Convert timestamp strings back to Date objects
+    return transactions.map((transaction) => ({
+      ...transaction,
+      timestamp: new Date(transaction.timestamp)
+    }));
   } catch (error) {
     console.error('Failed to load transactions from localStorage:', error);
     return [];
@@ -110,12 +118,20 @@ export const importDataFromJSON = (file: File): Promise<BackupData> => {
       try {
         const data = JSON.parse(e.target?.result as string);
         
-        if (data.products) saveProductsToStorage(data.products);
-        if (data.transactions) saveTransactionsToStorage(data.transactions);
+        if (data.products) saveProductsToStorage(data.products);        
+        if (data.transactions) {
+          // Convert timestamp strings back to Date objects before saving
+          const transactionsWithDates = data.transactions.map((transaction: Omit<Transaction, 'timestamp'> & { timestamp: string }) => ({
+            ...transaction,
+            timestamp: new Date(transaction.timestamp)
+          }));
+          saveTransactionsToStorage(transactionsWithDates);
+        }
         if (data.settings) saveSettingsToStorage(data.settings);
         
         resolve(data);
-      } catch (error) {
+      } catch (error) 
+      {
         reject(error);
       }
     };
