@@ -2,7 +2,8 @@
 export interface Product {
   id: string;
   name: string;
-  price: number;
+  price: number; // Harga Jual
+  costPrice?: number; // HPP (Harga Pokok Penjualan)
   description?: string;
   category?: string;
   stock?: number;
@@ -27,10 +28,14 @@ export interface Transaction {
   paymentMethod: 'cash';
   timestamp: Date;
   receiptNumber: string;
+  buyerName?: string;
+  buyerAddress?: string;
 }
 
 export interface PaymentData {
   total: number;
   amountPaid: number;
   change: number;
+  buyerName?: string;
+  buyerAddress?: string;
 }

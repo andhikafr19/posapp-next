@@ -20,6 +20,7 @@ const ProductManagement = () => {
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     price: 0,
+    costPrice: 0,
     description: '',
     category: '',
     stock: 0
@@ -56,6 +57,7 @@ const ProductManagement = () => {
     setFormData({
       name: '',
       price: 0,
+      costPrice: 0,
       description: '',
       category: '',
       stock: 0
@@ -87,6 +89,7 @@ const ProductManagement = () => {
       id: editingProduct ? editingProduct.id : generateNewId(),
       name: formData.name.trim(),
       price: Number(formData.price),
+      costPrice: Number(formData.costPrice) || undefined,
       description: formData.description?.trim() || '',
       category: formData.category?.trim() || 'Umum',
       stock: Number(formData.stock) || 0
@@ -186,7 +189,9 @@ const ProductManagement = () => {
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Produk</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Kategori</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Harga</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Harga Jual</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">HPP</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Margin</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Stok</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Aksi</th>
                 </tr>
@@ -211,6 +216,26 @@ const ProductManagement = () => {
                       <span className="font-medium text-gray-900">
                         {formatPrice(product.price)}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-gray-600">
+                        {product.costPrice ? formatPrice(product.costPrice) : '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {product.costPrice ? (
+                        <span className={`text-sm font-medium ${
+                          ((product.price - product.costPrice) / product.price * 100) >= 30 
+                            ? 'text-green-600' 
+                            : ((product.price - product.costPrice) / product.price * 100) >= 15
+                            ? 'text-yellow-600'
+                            : 'text-red-600'
+                        }`}>
+                          {((product.price - product.costPrice) / product.price * 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
@@ -290,10 +315,10 @@ const ProductManagement = () => {
                 />
               </div>
 
-              {/* Harga */}
+              {/* Harga Jual */}
               <div>
                 <label htmlFor="product-price" className="block text-sm font-medium text-gray-700 mb-2">
-                  Harga *
+                  Harga Jual *
                 </label>
                 <input
                   id="product-price"
@@ -305,6 +330,31 @@ const ProductManagement = () => {
                   placeholder="0"
                   className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 />
+              </div>
+
+              {/* HPP (Harga Pokok Penjualan) */}
+              <div>
+                <label htmlFor="product-cost-price" className="block text-sm font-medium text-gray-700 mb-2">
+                  HPP - Harga Pokok Penjualan (opsional)
+                </label>
+                <input
+                  id="product-cost-price"
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={formData.costPrice || ''}
+                  onChange={(e) => setFormData({ ...formData, costPrice: Number(e.target.value) })}
+                  placeholder="0"
+                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                />
+                {formData.price && formData.costPrice && formData.price > formData.costPrice && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    Margin laba: <span className="font-semibold text-green-600">
+                      {((formData.price - formData.costPrice) / formData.price * 100).toFixed(1)}%
+                    </span>
+                    {' '}({formatPrice(formData.price - formData.costPrice)} per unit)
+                  </p>
+                )}
               </div>
 
               {/* Kategori */}

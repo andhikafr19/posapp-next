@@ -70,6 +70,18 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
               <span className="font-medium">No. Nota:</span>
               <span className="font-mono font-semibold">{transaction.receiptNumber}</span>
             </div>
+            {transaction.buyerName && (
+            <div className="flex justify-between text-gray-900">
+              <span className="font-medium">Pembeli:</span>
+              <span className="font-semibold">{transaction.buyerName}</span>
+            </div>
+            )}
+            {transaction.buyerAddress && (
+            <div className="flex justify-between text-gray-900">
+              <span className="font-medium">Alamat:</span>
+              <span className="font-semibold">{transaction.buyerAddress}</span>
+            </div>
+            )}
             <div className="flex justify-between text-gray-900">
               <span className="font-medium">Tanggal:</span>
               <span className="font-semibold">{formatDateTime(transaction.timestamp)}</span>

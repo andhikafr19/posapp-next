@@ -337,7 +337,9 @@ export const CartProvider = ({ children }: CartProviderProps) => {
       change: paymentData.change,
       paymentMethod: 'cash',
       timestamp: new Date(),
-      receiptNumber: generateReceiptNumber()
+      receiptNumber: generateReceiptNumber(),
+      buyerName: paymentData.buyerName,
+      buyerAddress: paymentData.buyerAddress
     };
 
     dispatch({ 

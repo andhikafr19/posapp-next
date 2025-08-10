@@ -13,12 +13,16 @@ interface PaymentModalProps {
 // Komponen modal untuk input pembayaran cash dan hitung kembalian
 const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalProps) => {
   const [amountPaid, setAmountPaid] = useState<string>('');
+  const [buyerName, setBuyerName] = useState<string>('');
+  const [buyerAddress, setBuyerAddress] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Reset amount paid when modal opens
   useEffect(() => {
     if (isOpen) {
       setAmountPaid('');
+      setBuyerName('');
+      setBuyerAddress('');
     }
   }, [isOpen]);
 
@@ -68,7 +72,9 @@ const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalP
     const paymentData: PaymentData = {
       total: totalAmount,
       amountPaid: parseFloat(amountPaid),
-      change: calculateChange()
+      change: calculateChange(),
+      buyerName: buyerName.trim() || undefined,
+      buyerAddress: buyerAddress.trim() || undefined
     };
 
     onConfirm(paymentData);
@@ -81,7 +87,7 @@ const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalP
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-800">
@@ -133,6 +139,33 @@ const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalP
                 {formatPrice(parseFloat(amountPaid) || 0)}
               </p>
             )}
+          </div>
+          {/* Buyer Info (optional) */}
+          <div>
+            <label htmlFor="buyer-name" className="block text-sm font-medium text-gray-700 mb-2">
+              Nama Pembeli (opsional)
+            </label>
+            <input
+              id="buyer-name"
+              type="text"
+              value={buyerName}
+              onChange={e => setBuyerName(e.target.value)}
+              placeholder="Nama pembeli..."
+              className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label htmlFor="buyer-address" className="block text-sm font-medium text-gray-700 mb-2">
+              Alamat (opsional)
+            </label>
+            <input
+              id="buyer-address"
+              type="text"
+              value={buyerAddress}
+              onChange={e => setBuyerAddress(e.target.value)}
+              placeholder="Alamat pembeli..."
+              className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
           </div>
           {/* Change Calculation */}
           {amountPaid && (
