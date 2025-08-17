@@ -61,9 +61,9 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
         {/* Receipt Content */}
         <div className="p-6" id="receipt-content">          {/* Store Header */}
           <div className="text-center mb-6 border-b border-dashed border-gray-400 pb-4">
-            <h1 className="text-xl font-bold text-gray-900">WARUNG SEMBAKO</h1>
-            <p className="text-sm text-gray-700">Jl. Contoh No. 123, Kota</p>
-            <p className="text-sm text-gray-700">Telp: 0812-3456-7890</p>
+            <h1 className="text-xl font-bold text-gray-900">Makaroni Rakumi</h1>
+            <p className="text-sm text-gray-700">Since 2015</p>
+            <p className="text-sm text-gray-700">Telp: 085797987872</p>
           </div>          {/* Transaction Info */}
           <div className="mb-4 text-sm space-y-1">
             <div className="flex justify-between text-gray-900">
@@ -84,7 +84,7 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
             )}
             <div className="flex justify-between text-gray-900">
               <span className="font-medium">Tanggal:</span>
-              <span className="font-semibold">{formatDateTime(transaction.timestamp)}</span>
+              <span className="font-semibold">{formatDateTime(transaction.createdAt)}</span>
             </div>
             <div className="flex justify-between text-gray-900">
               <span className="font-medium">Kasir:</span>
@@ -117,11 +117,11 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
           <div className="space-y-2 text-sm text-gray-900">
             <div className="flex justify-between">
               <span className="font-medium">Subtotal:</span>
-              <span className="font-semibold">{formatPrice(transaction.total)}</span>
+              <span className="font-semibold">{formatPrice(transaction.totalAmount)}</span>
             </div>
             <div className="flex justify-between font-bold text-base border-t border-gray-400 pt-2 text-gray-900">
               <span>TOTAL:</span>
-              <span>{formatPrice(transaction.total)}</span>
+              <span>{formatPrice(transaction.totalAmount)}</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Bayar:</span>
@@ -129,7 +129,7 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
             </div>
             <div className="flex justify-between font-semibold">
               <span>Kembali:</span>
-              <span className="text-green-700">{formatPrice(transaction.change)}</span>
+              <span className="text-green-700">{formatPrice(transaction.changeAmount)}</span>
             </div>
           </div>          {/* Footer */}
           <div className="text-center mt-6 pt-4 border-t border-dashed border-gray-400 text-xs text-gray-700">

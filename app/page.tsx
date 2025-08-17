@@ -4,43 +4,54 @@ import React from 'react';
 import ProductGrid from '@/components/ProductGrid';
 import Cart from '@/components/Cart';
 import TransactionHistory from '@/components/TransactionHistory';
-import { DataManagement } from '@/components/DataManagement';
 import ProductManagement from '@/components/ProductManagement';
 import Analytics from '@/components/Analytics';
 import { useCart } from '@/contexts/CartContext';
 
 export default function POSPage() {
-  const { getItemCount, transactions } = useCart();
-  const [activeTab, setActiveTab] = React.useState<'pos' | 'products' | 'analytics' | 'history' | 'data'>('pos');
-  const itemCount = getItemCount();
+  const { cart, transactions } = useCart();
+  const [activeTab, setActiveTab] = React.useState<'pos' | 'products' | 'analytics' | 'history'>('pos');
+  const itemCount = cart.items.reduce((total, item) => total + item.quantity, 0);
 
   // Function untuk check apakah transaksi adalah hari ini
   const isToday = (date: Date | string) => {
     try {
-      const transactionDate = typeof date === 'string' ? new Date(date) : date;
+      let transactionDate: Date;
+      
+      if (typeof date === 'string') {
+        transactionDate = new Date(date);
+      } else {
+        transactionDate = date;
+      }
+      
+      // Handle invalid dates
+      if (isNaN(transactionDate.getTime())) {
+        console.warn('Invalid date detected:', date);
+        return false;
+      }
+      
       const today = new Date();
       
-      return (
-        transactionDate.getDate() === today.getDate() &&
-        transactionDate.getMonth() === today.getMonth() &&
-        transactionDate.getFullYear() === today.getFullYear()
-      );
-    } catch {
+      // Compare dates (ignore time) using toDateString for accurate comparison
+      return transactionDate.toDateString() === today.toDateString();
+    } catch (error) {
+      console.error('Error parsing date:', date, error);
       return false;
     }
   };
 
   // Filter transaksi hari ini saja
-  const todayTransactions = transactions.filter(transaction => isToday(transaction.timestamp));
+  const todayTransactions = transactions.filter(transaction => isToday(transaction.createdAt));
+  
+  // Debug logging (remove in production)
+  if (transactions.length > 0) {
+    console.log('Sample transaction date:', transactions[0].createdAt);
+    console.log('Today transactions count:', todayTransactions.length, '/', transactions.length);
+  }
   
   // Hitung total penjualan hari ini (hanya dari transaksi hari ini)
-  const todayTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.total, 0);
+  const todayTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.totalAmount, 0);
   const todayCount = todayTransactions.length;
-
-  // Handle data imported - refresh the page to reload data from localStorage
-  const handleDataImported = () => {
-    window.location.reload();
-  };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -137,16 +148,6 @@ export default function POSPage() {
               >
                 📊 Riwayat Transaksi ({transactions.length})
               </button>
-              <button
-                onClick={() => setActiveTab('data')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'data'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                💾 Data Management
-              </button>
             </nav>
           </div>
         </div>
@@ -183,12 +184,6 @@ export default function POSPage() {
         {activeTab === 'history' && (
           <div className="max-w-4xl mx-auto">
             <TransactionHistory transactions={transactions} />
-          </div>
-        )}
-        
-        {activeTab === 'data' && (
-          <div className="max-w-2xl mx-auto">
-            <DataManagement onDataImported={handleDataImported} />
           </div>
         )}
       </main>

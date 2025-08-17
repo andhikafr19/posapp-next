@@ -83,7 +83,7 @@ const Analytics = ({ transactions }: AnalyticsProps) => {
   const dailyProfitData = useMemo(() => {
     // Group transaksi berdasarkan tanggal
     const transactionsByDate = transactions.reduce((acc, transaction) => {
-      const dateKey = getDateString(transaction.timestamp);
+      const dateKey = getDateString(transaction.createdAt);
       if (!acc[dateKey]) {
         acc[dateKey] = {
           count: 0,
@@ -92,7 +92,7 @@ const Analytics = ({ transactions }: AnalyticsProps) => {
         };
       }
       acc[dateKey].count += 1;
-      acc[dateKey].revenue += transaction.total;
+      acc[dateKey].revenue += transaction.totalAmount;
       
         // Hitung laba berdasarkan HPP yang sebenarnya
         const transactionProfit = transaction.items.reduce((profit, item) => {
@@ -146,7 +146,7 @@ const Analytics = ({ transactions }: AnalyticsProps) => {
   const dailyTransactionData = useMemo(() => {
     // Group transaksi berdasarkan tanggal
     const transactionsByDate = transactions.reduce((acc, transaction) => {
-      const dateKey = getDateString(transaction.timestamp);
+      const dateKey = getDateString(transaction.createdAt);
       if (!acc[dateKey]) {
         acc[dateKey] = {
           count: 0,
@@ -154,7 +154,7 @@ const Analytics = ({ transactions }: AnalyticsProps) => {
         };
       }
       acc[dateKey].count += 1;
-      acc[dateKey].total += transaction.total;
+      acc[dateKey].total += transaction.totalAmount;
       return acc;
     }, {} as Record<string, { count: number; total: number }>);
 
@@ -410,12 +410,12 @@ const Analytics = ({ transactions }: AnalyticsProps) => {
   // Statistik ringkasan dengan profit calculation berdasarkan HPP
   const stats = useMemo(() => {
     const totalTransactions = transactions.length;
-    const totalRevenue = transactions.reduce((sum, t) => sum + t.total, 0);
+    const totalRevenue = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
     const avgTransactionValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
     
     const today = new Date().toISOString().split('T')[0];
-    const todayTransactions = transactions.filter(t => getDateString(t.timestamp) === today);
-    const todayRevenue = todayTransactions.reduce((sum, t) => sum + t.total, 0);
+    const todayTransactions = transactions.filter(t => getDateString(t.createdAt) === today);
+    const todayRevenue = todayTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
 
     // Hitung profit berdasarkan HPP yang sebenarnya
     const totalProfit = transactions.reduce((profit, transaction) => {

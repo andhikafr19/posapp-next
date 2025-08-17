@@ -1,9 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product } from '@/types/pos';
 import { useCart } from '@/contexts/CartContext';
-import { getAllCategories } from '@/data/products';
+import { getAllCategories } from '@/utils/productHelpers';
+
+// Interface untuk toast notification
+interface Toast {
+  id: string;
+  type: 'success' | 'error';
+  message: string;
+}
 
 // Komponen untuk mengelola produk (CRUD operations)
 const ProductManagement = () => {
@@ -12,7 +19,9 @@ const ProductManagement = () => {
     updateProduct, 
     addProduct, 
     deleteProduct,
-    updateProductStock 
+    updateProductStock,
+    isLoading,
+    refreshData
   } = useCart();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,13 +36,44 @@ const ProductManagement = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const categories = ['Semua', ...getAllCategories()];
+  const categories = ['Semua', ...getAllCategories(products)];
+
+  // Fungsi untuk menampilkan toast notification
+  const showToast = (type: 'success' | 'error', message: string) => {
+    const id = Date.now().toString();
+    const newToast: Toast = { id, type, message };
+    
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove toast after 3 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 3000);
+  };
+
+  // Fungsi untuk menghapus toast manual
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // Handler untuk refresh manual
+  const handleRefresh = async () => {
+    try {
+      await refreshData();
+      showToast('success', 'Data produk berhasil di-refresh!');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      showToast('error', 'Gagal refresh data. Silakan coba lagi.');
+    }
+  };
 
   // Filter produk berdasarkan pencarian dan kategori
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = (product.name || '').toLowerCase().includes(searchLower) ||
+                         (product.description || '').toLowerCase().includes(searchLower);
     const matchesCategory = selectedCategory === 'Semua' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -79,36 +119,50 @@ const ProductManagement = () => {
   };
 
   // Simpan produk (add atau update)
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (!formData.name || !formData.price || formData.price <= 0) {
-      alert('Nama produk dan harga harus diisi dengan benar!');
+      showToast('error', 'Nama produk dan harga harus diisi dengan benar!');
       return;
     }
 
-    const productData: Product = {
-      id: editingProduct ? editingProduct.id : generateNewId(),
-      name: formData.name.trim(),
-      price: Number(formData.price),
-      costPrice: Number(formData.costPrice) || undefined,
-      description: formData.description?.trim() || '',
-      category: formData.category?.trim() || 'Umum',
-      stock: Number(formData.stock) || 0
-    };
+    try {
+      const productData: Product = {
+        id: editingProduct ? editingProduct.id : generateNewId(),
+        name: formData.name.trim(),
+        price: Number(formData.price),
+        costPrice: Number(formData.costPrice) || undefined,
+        description: formData.description?.trim() || '',
+        category: formData.category?.trim() || 'Umum',
+        stock: Number(formData.stock) || 0,
+        isActive: true // Ensure new products are active by default
+      };
 
-    if (editingProduct) {
-      updateProduct(productData);
-    } else {
-      addProduct(productData);
+      if (editingProduct) {
+        await updateProduct(productData);
+        showToast('success', `Produk "${productData.name}" berhasil diupdate!`);
+      } else {
+        await addProduct(productData);
+        showToast('success', `Produk "${productData.name}" berhasil ditambahkan!`);
+      }
+
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      showToast('error', 'Gagal menyimpan produk. Silakan coba lagi.');
     }
-
-    setIsModalOpen(false);
-    resetForm();
   };
 
   // Hapus produk dengan konfirmasi
-  const handleDeleteProduct = (product: Product) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus produk "${product.name}"?`)) {
-      deleteProduct(product.id);
+  const handleDeleteProduct = async (product: Product) => {
+    if (window.confirm(`Apakah Anda yakin ingin menghapus produk "${product.name || 'Tanpa Nama'}"?`)) {
+      try {
+        await deleteProduct(product.id);
+        showToast('success', `Produk "${product.name}" berhasil dihapus!`);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        showToast('error', 'Gagal menghapus produk. Silakan coba lagi.');
+      }
     }
   };
 
@@ -126,12 +180,21 @@ const ProductManagement = () => {
           <h2 className="text-2xl font-bold text-gray-800">
             📦 Manajemen Produk
           </h2>
-          <button
-            onClick={handleAddProduct}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-          >
-            ➕ Tambah Produk
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+            >
+              🔄 Refresh
+            </button>
+            <button
+              onClick={handleAddProduct}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+            >
+              ➕ Tambah Produk
+            </button>
+          </div>
         </div>
 
         {/* Search dan Filter */}
@@ -172,7 +235,17 @@ const ProductManagement = () => {
 
       {/* Product List */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {filteredProducts.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Memuat produk...
+            </h3>
+            <p className="text-gray-500">
+              Mohon tunggu sebentar
+            </p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="p-8 text-center">
             <div className="text-4xl mb-4">📭</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -223,7 +296,7 @@ const ProductManagement = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {product.costPrice ? (
+                      {product.costPrice && product.price ? (
                         <span className={`text-sm font-medium ${
                           ((product.price - product.costPrice) / product.price * 100) >= 30 
                             ? 'text-green-600' 
@@ -287,6 +360,37 @@ const ProductManagement = () => {
         )}
       </div>
 
+      {/* Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`p-4 rounded-lg shadow-lg text-white font-medium transition-all duration-300 transform ${
+                toast.type === 'success' 
+                  ? 'bg-green-500 border-l-4 border-green-700' 
+                  : 'bg-red-500 border-l-4 border-red-700'
+              } animate-slide-in-right`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="mr-2">
+                    {toast.type === 'success' ? '✓' : '✗'}
+                  </span>
+                  {toast.message}
+                </div>
+                <button
+                  onClick={() => removeToast(toast.id)}
+                  className="ml-4 text-white hover:text-gray-200"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Modal untuk Add/Edit Product */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -348,13 +452,26 @@ const ProductManagement = () => {
                   className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-300 rounded-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 />
                 {formData.price && formData.costPrice && formData.price > formData.costPrice && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Margin laba: <span className="font-semibold text-green-600">
-                      {((formData.price - formData.costPrice) / formData.price * 100).toFixed(1)}%
-                    </span>
-                    {' '}({formatPrice(formData.price - formData.costPrice)} per unit)
-                  </p>
+                  <div className="mt-2 text-sm text-gray-600 space-y-1">
+                    {/* Margin */}
+                    <p>
+                      Margin laba:{" "}
+                      <span className="font-semibold text-green-600">
+                        {((formData.price - formData.costPrice) / formData.price * 100).toFixed(1)}%
+                      </span>{" "}
+                      ({formatPrice(formData.price - formData.costPrice)} per unit)
+                    </p>
+
+                    {/* Markup */}
+                    <p>
+                      Markup:{" "}
+                      <span className="font-semibold text-blue-600">
+                        {((formData.price - formData.costPrice) / formData.costPrice * 100).toFixed(1)}%
+                      </span>
+                    </p>
+                  </div>
                 )}
+
               </div>
 
               {/* Kategori */}

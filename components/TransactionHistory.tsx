@@ -62,12 +62,12 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
   };
 
   // Group transaksi berdasarkan hari
-  const todayTransactions = transactions.filter(transaction => isToday(transaction.timestamp));
-  const previousTransactions = transactions.filter(transaction => !isToday(transaction.timestamp));
+  const todayTransactions = transactions.filter(transaction => isToday(transaction.createdAt));
+  const previousTransactions = transactions.filter(transaction => !isToday(transaction.createdAt));
 
   // Hitung total penjualan hari ini dan keseluruhan
-  const todayTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.total, 0);
-  const totalOverall = transactions.reduce((sum, transaction) => sum + transaction.total, 0);
+  const todayTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.totalAmount, 0);
+  const totalOverall = transactions.reduce((sum, transaction) => sum + transaction.totalAmount, 0);
   const todayCount = todayTransactions.length;
   const totalCount = transactions.length;
 
@@ -165,7 +165,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                             #{transaction.receiptNumber}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatDateTime(transaction.timestamp)}
+                            {formatDateTime(transaction.createdAt)}
                           </span>
                         </div>
                         
@@ -179,7 +179,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                           <div>
                             <span className="text-gray-600">Total: </span>
                             <span className="font-semibold text-green-600">
-                              {formatPrice(transaction.total)}
+                              {formatPrice(transaction.totalAmount)}
                             </span>
                           </div>
                           <div>
@@ -188,7 +188,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                           </div>
                           <div>
                             <span className="text-gray-600">Kembali: </span>
-                            <span>{formatPrice(transaction.change)}</span>
+                            <span>{formatPrice(transaction.changeAmount)}</span>
                           </div>
                         </div>
                       </div>
@@ -225,7 +225,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                             #{transaction.receiptNumber}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatDateTime(transaction.timestamp)}
+                            {formatDateTime(transaction.createdAt)}
                           </span>
                         </div>
                         
@@ -239,7 +239,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                           <div>
                             <span className="text-gray-600">Total: </span>
                             <span className="font-semibold text-gray-600">
-                              {formatPrice(transaction.total)}
+                              {formatPrice(transaction.totalAmount)}
                             </span>
                           </div>
                           <div>
@@ -248,7 +248,7 @@ const TransactionHistory = ({ transactions, onClearHistory }: TransactionHistory
                           </div>
                           <div>
                             <span className="text-gray-600">Kembali: </span>
-                            <span>{formatPrice(transaction.change)}</span>
+                            <span>{formatPrice(transaction.changeAmount)}</span>
                           </div>
                         </div>
                       </div>

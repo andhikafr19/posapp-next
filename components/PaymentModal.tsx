@@ -6,7 +6,7 @@ import { PaymentData } from '@/types/pos';
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (paymentData: PaymentData) => void;
+  onConfirm: (paymentData: PaymentData) => Promise<void>;
   totalAmount: number;
 }
 
@@ -66,19 +66,22 @@ const PaymentModal = ({ isOpen, onClose, onConfirm, totalAmount }: PaymentModalP
 
     setIsProcessing(true);
     
-    // Simulasi processing
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const paymentData: PaymentData = {
+        amountPaid: parseFloat(amountPaid),
+        changeAmount: calculateChange(),
+        paymentMethod: 'cash',
+        buyerName: buyerName.trim() || undefined,
+        buyerAddress: buyerAddress.trim() || undefined
+      };
 
-    const paymentData: PaymentData = {
-      total: totalAmount,
-      amountPaid: parseFloat(amountPaid),
-      change: calculateChange(),
-      buyerName: buyerName.trim() || undefined,
-      buyerAddress: buyerAddress.trim() || undefined
-    };
-
-    onConfirm(paymentData);
-    setIsProcessing(false);
+      await onConfirm(paymentData);
+    } catch (error) {
+      console.error('Payment failed:', error);
+      // Error handling will be done in Cart component
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const change = calculateChange();

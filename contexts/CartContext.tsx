@@ -1,14 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useMemo } from 'react';
 import { Product, CartItem, Cart, Transaction, PaymentData } from '@/types/pos';
-import { mockProducts } from '@/data/products';
-import { 
-  saveProductsToStorage, 
-  loadProductsFromStorage,
-  saveTransactionsToStorage,
-  loadTransactionsFromStorage 
-} from '@/utils/storage';
 
 // Action types untuk cart reducer
 type CartAction =
@@ -21,169 +14,144 @@ type CartAction =
   | { type: 'UPDATE_PRODUCT'; payload: Product }
   | { type: 'ADD_PRODUCT'; payload: Product }
   | { type: 'DELETE_PRODUCT'; payload: string }
-  | { type: 'HYDRATE_PRODUCTS'; payload: Product[] }
-  | { type: 'HYDRATE_TRANSACTIONS'; payload: Transaction[] };
+  | { type: 'SET_PRODUCTS'; payload: Product[] }
+  | { type: 'SET_TRANSACTIONS'; payload: Transaction[] }
+  | { type: 'SET_LOADING'; payload: boolean };
 
 // Interface untuk Cart Context
 interface CartContextType {
   cart: Cart;
   transactions: Transaction[];
   products: Product[];
-  addToCart: (product: Product) => boolean; // Returns false if insufficient stock
+  isLoading: boolean;
+  addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  getItemCount: () => number;
-  completeTransaction: (paymentData: PaymentData) => Transaction;
-  clearTransactionHistory: () => void;
-  getProductById: (productId: string) => Product | undefined;
-  isLowStock: (productId: string, threshold?: number) => boolean;
-  // Product management functions
-  updateProduct: (product: Product) => void;
-  addProduct: (product: Product) => void;
-  deleteProduct: (productId: string) => void;
-  updateProductStock: (productId: string, newStock: number) => void;
+  completeTransaction: (paymentData: PaymentData) => Promise<void>;
+  updateProductStock: (productId: string, newStock: number) => Promise<void>;
+  updateProduct: (product: Product) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
-// Initial state untuk cart dan transactions
-interface AppState {
+// State interface
+interface CartState {
   cart: Cart;
   transactions: Transaction[];
   products: Product[];
+  isLoading: boolean;
 }
 
-const initialState: AppState = {
+// Initial state
+const initialState: CartState = {
   cart: { items: [], total: 0 },
   transactions: [],
-  products: [...mockProducts] // Start with mock data, will be hydrated from localStorage
+  products: [],
+  isLoading: true
 };
 
-// Generate receipt number
-const generateReceiptNumber = (): string => {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const time = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${date}${time}${random}`;
+// Utility function untuk calculate cart total
+const calculateTotal = (items: CartItem[]): number => {
+  return items.reduce((total, item) => total + (item.price * item.quantity), 0);
 };
 
-// App reducer untuk mengelola state cart dan transactions
-const appReducer = (state: AppState, action: CartAction): AppState => {
-  switch (action.type) {    case 'ADD_ITEM': {      // Check stock availability in reducer as well (defensive programming)
-      const currentProduct = state.products.find(p => p.id === action.payload.id);
-      if (!currentProduct?.stock || currentProduct.stock === 0) {
-        return state; // Don't add if no stock
-      }
-
-      const existingItem = state.cart.items.find(
-        item => item.product.id === action.payload.id
-      );
-
-      const currentCartQuantity = existingItem ? existingItem.quantity : 0;
-      
-      // Check if adding one more would exceed stock
-      if (currentCartQuantity >= currentProduct.stock) {
-        return state; // Don't add if would exceed stock
-      }
-
-      let newItems: CartItem[];
+// Cart reducer
+const cartReducer = (state: CartState, action: CartAction): CartState => {
+  switch (action.type) {
+    case 'ADD_ITEM': {
+      const existingItem = state.cart.items.find(item => item.id === action.payload.id);
       
       if (existingItem) {
-        // Jika item sudah ada, tambah quantity
-        newItems = state.cart.items.map(item =>
-          item.product.id === action.payload.id
+        const updatedItems = state.cart.items.map(item =>
+          item.id === action.payload.id 
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
+        return {
+          ...state,
+          cart: {
+            items: updatedItems,
+            total: calculateTotal(updatedItems)
+          }
+        };
       } else {
-        // Jika item belum ada, tambah item baru
-        newItems = [...state.cart.items, { product: action.payload, quantity: 1 }];
+        const newItem: CartItem = {
+          id: action.payload.id,
+          name: action.payload.name,
+          price: action.payload.price,
+          quantity: 1,
+          product: action.payload
+        };
+        const updatedItems = [...state.cart.items, newItem];
+        return {
+          ...state,
+          cart: {
+            items: updatedItems,
+            total: calculateTotal(updatedItems)
+          }
+        };
       }
-
-      const total = newItems.reduce(
-        (sum, item) => sum + (item.product.price * item.quantity),
-        0
-      );
-
-      return { 
-        ...state, 
-        cart: { items: newItems, total } 
-      };
     }
 
     case 'REMOVE_ITEM': {
-      const newItems = state.cart.items.filter(
-        item => item.product.id !== action.payload
-      );
-      
-      const total = newItems.reduce(
-        (sum, item) => sum + (item.product.price * item.quantity),
-        0
-      );
-
-      return { 
-        ...state, 
-        cart: { items: newItems, total } 
-      };
-    }    case 'UPDATE_QUANTITY': {
-      const { productId, quantity } = action.payload;
-      
-      if (quantity <= 0) {
-        // Jika quantity 0 atau negatif, hapus item
-        return appReducer(state, { type: 'REMOVE_ITEM', payload: productId });
-      }      // Check stock availability
-      const currentProduct = state.products.find(p => p.id === productId);
-      if (!currentProduct?.stock || quantity > currentProduct.stock) {
-        return state; // Don't update if quantity exceeds available stock
-      }
-
-      const newItems = state.cart.items.map(item =>
-        item.product.id === productId
-          ? { ...item, quantity }
-          : item
-      );
-
-      const total = newItems.reduce(
-        (sum, item) => sum + (item.product.price * item.quantity),
-        0
-      );
-
-      return { 
-        ...state, 
-        cart: { items: newItems, total } 
+      const updatedItems = state.cart.items.filter(item => item.id !== action.payload);
+      return {
+        ...state,
+        cart: {
+          items: updatedItems,
+          total: calculateTotal(updatedItems)
+        }
       };
     }
 
-    case 'CLEAR_CART':
-      return { 
-        ...state, 
-        cart: { items: [], total: 0 } 
-      };    case 'COMPLETE_TRANSACTION': {
-      const newTransaction = action.payload.transaction;
-        // Update stock for all items in the transaction
-      const updatedProducts = state.products.map(product => {
-        const soldItem = newTransaction.items.find(item => item.product.id === product.id);
-        if (soldItem && product.stock !== undefined) {
-          return {
-            ...product,
-            stock: Math.max(0, product.stock - soldItem.quantity)
-          };
-        }
-        return product;
-      });
+    case 'UPDATE_QUANTITY': {
+      if (action.payload.quantity <= 0) {
+        const updatedItems = state.cart.items.filter(item => item.id !== action.payload.productId);
+        return {
+          ...state,
+          cart: {
+            items: updatedItems,
+            total: calculateTotal(updatedItems)
+          }
+        };
+      } else {
+        const updatedItems = state.cart.items.map(item =>
+          item.id === action.payload.productId
+            ? { ...item, quantity: action.payload.quantity }
+            : item
+        );
+        return {
+          ...state,
+          cart: {
+            items: updatedItems,
+            total: calculateTotal(updatedItems)
+          }
+        };
+      }
+    }
 
+    case 'CLEAR_CART':
       return {
-        cart: { items: [], total: 0 }, // Clear cart
-        transactions: [...state.transactions, newTransaction],
-        products: updatedProducts
+        ...state,
+        cart: { items: [], total: 0 }
       };
-    }    case 'UPDATE_PRODUCT_STOCK': {
-      const { productId, newStock } = action.payload;
+
+    case 'COMPLETE_TRANSACTION':
+      return {
+        ...state,
+        transactions: [action.payload.transaction, ...state.transactions],
+        cart: { items: [], total: 0 }
+      };
+
+    case 'UPDATE_PRODUCT_STOCK': {
       const updatedProducts = state.products.map(product =>
-        product.id === productId
-          ? { ...product, stock: Math.max(0, newStock) }
+        product.id === action.payload.productId
+          ? { ...product, stock: action.payload.newStock }
           : product
-      );      return {
+      );
+      return {
         ...state,
         products: updatedProducts
       };
@@ -191,9 +159,7 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
 
     case 'UPDATE_PRODUCT': {
       const updatedProducts = state.products.map(product =>
-        product.id === action.payload.id
-          ? { ...action.payload }
-          : product
+        product.id === action.payload.id ? action.payload : product
       );
       return {
         ...state,
@@ -201,115 +167,144 @@ const appReducer = (state: AppState, action: CartAction): AppState => {
       };
     }
 
-    case 'ADD_PRODUCT': {
+    case 'ADD_PRODUCT':
       return {
         ...state,
-        products: [...state.products, action.payload]
+        products: [action.payload, ...state.products]
       };
-    }
 
-    case 'DELETE_PRODUCT': {
-      const filteredProducts = state.products.filter(
-        product => product.id !== action.payload
-      );
-      // Also remove from cart if exists
-      const filteredCartItems = state.cart.items.filter(
-        item => item.product.id !== action.payload
-      );
-      const newTotal = filteredCartItems.reduce(
-        (sum, item) => sum + (item.product.price * item.quantity),
-        0
-      );
+    case 'DELETE_PRODUCT':
       return {
         ...state,
-        products: filteredProducts,
-        cart: { items: filteredCartItems, total: newTotal }
+        products: state.products.filter(product => product.id !== action.payload)
       };
-    }
 
-    case 'HYDRATE_PRODUCTS': {
+    case 'SET_PRODUCTS':
       return {
         ...state,
         products: action.payload
       };
-    }
 
-    case 'HYDRATE_TRANSACTIONS': {
+    case 'SET_TRANSACTIONS':
       return {
         ...state,
         transactions: action.payload
       };
-    }
+
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.payload
+      };
 
     default:
       return state;
   }
 };
 
-// Create Context
+// Create context
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Cart Provider Component
-interface CartProviderProps {
-  children: ReactNode;
-}
+// Custom hook to use cart context
+export const useCart = (): CartContextType => {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+};
 
-export const CartProvider = ({ children }: CartProviderProps) => {
-  const [state, dispatch] = useReducer(appReducer, initialState);
-  const [isHydrated, setIsHydrated] = React.useState(false);
+// API helper functions
+const api = {
+  // Products API
+  async getProducts(): Promise<Product[]> {
+    const response = await fetch('/api/products?isActive=true');
+    if (!response.ok) throw new Error('Failed to fetch products');
+    const result = await response.json();
+    return result.data || [];
+  },
 
-  // Load data from localStorage after component mounts (client-side only)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  async createProduct(product: Omit<Product, 'id'>): Promise<Product> {
+    const response = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product)
+    });
+    if (!response.ok) throw new Error('Failed to create product');
+    return response.json();
+  },
 
-    try {
-      const storedProducts = loadProductsFromStorage();
-      const storedTransactions = loadTransactionsFromStorage();
-      
-      // Update state with stored data if available
-      if (storedProducts) {
-        dispatch({ type: 'HYDRATE_PRODUCTS', payload: storedProducts });
-      }
-      if (storedTransactions && storedTransactions.length > 0) {
-        dispatch({ type: 'HYDRATE_TRANSACTIONS', payload: storedTransactions });
-      }
-      
-      setIsHydrated(true);
-    } catch (error) {
-      console.error('Failed to load data from localStorage:', error);
-      setIsHydrated(true);
+  async updateProduct(product: Product): Promise<Product> {
+    const response = await fetch(`/api/products/${product.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product)
+    });
+    if (!response.ok) throw new Error('Failed to update product');
+    return response.json();
+  },
+
+  async deleteProduct(productId: string): Promise<void> {
+    const response = await fetch(`/api/products/${productId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete product');
+  },
+
+  // Transactions API
+  async getTransactions(): Promise<Transaction[]> {
+    const response = await fetch('/api/transactions');
+    if (!response.ok) throw new Error('Failed to fetch transactions');
+    const result = await response.json();
+    return result.data || [];
+  },
+
+  async createTransaction(transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> {
+    const response = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transaction)
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to create transaction');
     }
+    const result = await response.json();
+    return result.data;
+  }
+};
+
+// Provider component
+export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(cartReducer, initialState);
+
+  // Load initial data from database
+  const refreshData = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      
+      const [products, transactions] = await Promise.all([
+        api.getProducts(),
+        api.getTransactions()
+      ]);
+
+      dispatch({ type: 'SET_PRODUCTS', payload: products });
+      dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
+    } catch (error) {
+      console.error('Failed to load data from database:', error);
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  // Load data on mount
+  useEffect(() => {
+    refreshData();
   }, []);
 
-  // Effect to save data to localStorage when state changes (only after hydration)
-  useEffect(() => {
-    if (!isHydrated || typeof window === 'undefined') return;
-
-    try {
-      saveProductsToStorage(state.products);
-      saveTransactionsToStorage(state.transactions);
-    } catch (error) {
-      console.error('Failed to save state to localStorage:', error);
-    }
-  }, [state.products, state.transactions, isHydrated]);  const addToCart = (product: Product): boolean => {
-    // Check stock availability
-    const currentProduct = state.products.find(p => p.id === product.id);
-    if (!currentProduct?.stock || currentProduct.stock === 0) {
-      return false; // No stock available
-    }
-
-    const existingCartItem = state.cart.items.find(
-      item => item.product.id === product.id
-    );
-    const currentCartQuantity = existingCartItem ? existingCartItem.quantity : 0;
-    
-    // Check if adding one more would exceed stock
-    if (currentCartQuantity >= currentProduct.stock) {
-      return false; // Would exceed available stock
-    }
-
+  // Cart actions
+  const addToCart = (product: Product) => {
     dispatch({ type: 'ADD_ITEM', payload: product });
-    return true; // Successfully added
   };
 
   const removeFromCart = (productId: string) => {
@@ -324,77 +319,148 @@ export const CartProvider = ({ children }: CartProviderProps) => {
     dispatch({ type: 'CLEAR_CART' });
   };
 
-  const getItemCount = () => {
-    return state.cart.items.reduce((count: number, item: CartItem) => count + item.quantity, 0);
+  const completeTransaction = async (paymentData: PaymentData) => {
+    try {
+      // Generate receipt number
+      const receiptNumber = `POS-${Date.now()}`;
+      
+      // Create transaction object
+      const transaction: Omit<Transaction, 'id' | 'createdAt'> = {
+        receiptNumber,
+        items: state.cart.items,
+        totalAmount: state.cart.total,
+        amountPaid: paymentData.amountPaid,
+        changeAmount: paymentData.changeAmount,
+        paymentMethod: paymentData.paymentMethod,
+        buyerName: paymentData.buyerName,
+        buyerAddress: paymentData.buyerAddress,
+        status: 'completed'
+      };
+
+      // Debug logging
+      console.log('Sending transaction data:', JSON.stringify(transaction, null, 2));
+
+      // Save to database - THIS IS THE CRITICAL PART
+      const savedTransaction = await api.createTransaction(transaction);
+
+      console.log('Transaction saved successfully:', savedTransaction);
+
+      // Update local state first
+      dispatch({ 
+        type: 'COMPLETE_TRANSACTION', 
+        payload: { 
+          paymentData, 
+          transaction: savedTransaction 
+        } 
+      });
+
+      // Update product stock in background - don't let this fail the transaction
+      const stockUpdatePromises = state.cart.items.map(async (item) => {
+        try {
+          const product = state.products.find(p => p.id === item.id);
+          if (product?.stock !== undefined) {
+            const newStock = Math.max(0, product.stock - item.quantity);
+            console.log(`Updating stock for ${product.name}: ${product.stock} -> ${newStock}`);
+            await updateProductStock(item.id, newStock);
+          }
+        } catch (stockError) {
+          console.error(`Failed to update stock for product ${item.name} (${item.id}):`, stockError);
+          // Don't throw - just log the error
+        }
+      });
+
+      // Wait for all stock updates but don't fail if some fail
+      await Promise.allSettled(stockUpdatePromises);
+
+    } catch (error) {
+      console.error('Failed to complete transaction:', error);
+      throw error; // Re-throw only critical errors (transaction creation)
+    }
   };
 
-  const completeTransaction = (paymentData: PaymentData): Transaction => {
-    const transaction: Transaction = {
-      id: crypto.randomUUID(),
-      items: [...state.cart.items],
-      total: paymentData.total,
-      amountPaid: paymentData.amountPaid,
-      change: paymentData.change,
-      paymentMethod: 'cash',
-      timestamp: new Date(),
-      receiptNumber: generateReceiptNumber(),
-      buyerName: paymentData.buyerName,
-      buyerAddress: paymentData.buyerAddress
-    };
-
-    dispatch({ 
-      type: 'COMPLETE_TRANSACTION', 
-      payload: { paymentData, transaction } 
-    });
-
-    return transaction;
-  };
-  const clearTransactionHistory = () => {
-    // For now, we'll implement this later if needed
-    // Could add a new action type for this
-  };
-
-  const getProductById = (productId: string): Product | undefined => {
-    return state.products.find(product => product.id === productId);
-  };  const isLowStock = (productId: string, threshold: number = 5): boolean => {
-    const product = getProductById(productId);
-    if (!product?.stock) return false;
-    return product.stock <= threshold && product.stock > 0;
+  const updateProductStock = async (productId: string, newStock: number) => {
+    try {
+      const product = state.products.find(p => p.id === productId);
+      if (product) {
+        const updatedProduct = { ...product, stock: newStock };
+        console.log(`Updating product ${productId} stock to ${newStock}`);
+        
+        // Call API to update product
+        const response = await fetch(`/api/products/${productId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stock: newStock })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update product stock');
+        }
+        
+        const result = await response.json();
+        console.log('Stock update result:', result);
+        
+        // Update local state
+        dispatch({ type: 'UPDATE_PRODUCT_STOCK', payload: { productId, newStock } });
+      }
+    } catch (error) {
+      console.error('Failed to update product stock:', error);
+      throw error;
+    }
   };
 
-  // Product management functions
-  const updateProduct = (product: Product) => {
-    dispatch({ type: 'UPDATE_PRODUCT', payload: product });
+  const updateProduct = async (product: Product) => {
+    try {
+      const updatedProduct = await api.updateProduct(product);
+      dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
+      // Refresh data to get latest from database
+      await refreshData();
+    } catch (error) {
+      console.error('Failed to update product:', error);
+      throw error;
+    }
   };
 
-  const addProduct = (product: Product) => {
-    dispatch({ type: 'ADD_PRODUCT', payload: product });
+  const addProduct = async (productData: Omit<Product, 'id'>) => {
+    try {
+      const newProduct = await api.createProduct(productData);
+      dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
+      // Refresh data to get latest from database
+      await refreshData();
+    } catch (error) {
+      console.error('Failed to add product:', error);
+      throw error;
+    }
   };
 
-  const deleteProduct = (productId: string) => {
-    dispatch({ type: 'DELETE_PRODUCT', payload: productId });
+  const deleteProduct = async (productId: string) => {
+    try {
+      await api.deleteProduct(productId);
+      dispatch({ type: 'DELETE_PRODUCT', payload: productId });
+      // Refresh data to get latest from database
+      await refreshData();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+      throw error;
+    }
   };
 
-  const updateProductStock = (productId: string, newStock: number) => {
-    dispatch({ type: 'UPDATE_PRODUCT_STOCK', payload: { productId, newStock } });
-  };  const contextValue = {
+  const contextValue: CartContextType = useMemo(() => ({
     cart: state.cart,
     transactions: state.transactions,
     products: state.products,
+    isLoading: state.isLoading,
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
-    getItemCount,
     completeTransaction,
-    clearTransactionHistory,
-    getProductById,
-    isLowStock,
+    updateProductStock,
     updateProduct,
     addProduct,
     deleteProduct,
-    updateProductStock
-  };
+    refreshData
+  }), [state, addToCart, removeFromCart, updateQuantity, clearCart, completeTransaction, updateProductStock, updateProduct, addProduct, deleteProduct, refreshData]);
 
   return (
     <CartContext.Provider value={contextValue}>
@@ -403,11 +469,4 @@ export const CartProvider = ({ children }: CartProviderProps) => {
   );
 };
 
-// Hook untuk menggunakan Cart Context
-export const useCart = () => {
-  const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
-  return context;
-};
+export default CartProvider;

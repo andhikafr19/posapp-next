@@ -7,11 +7,17 @@ export interface Product {
   description?: string;
   category?: string;
   stock?: number;
+  isActive?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface CartItem {
-  product: Product;
+  id: string; // Product ID
+  name: string;
+  price: number;
   quantity: number;
+  product: Product;
 }
 
 export interface Cart {
@@ -21,21 +27,23 @@ export interface Cart {
 
 export interface Transaction {
   id: string;
-  items: CartItem[];
-  total: number;
-  amountPaid: number;
-  change: number;
-  paymentMethod: 'cash';
-  timestamp: Date;
   receiptNumber: string;
+  items: CartItem[];
+  totalAmount: number;
+  amountPaid: number;
+  changeAmount: number;
+  paymentMethod: 'cash' | 'card' | 'digital';
   buyerName?: string;
   buyerAddress?: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface PaymentData {
-  total: number;
   amountPaid: number;
-  change: number;
+  changeAmount: number;
+  paymentMethod: 'cash' | 'card' | 'digital';
   buyerName?: string;
   buyerAddress?: string;
 }

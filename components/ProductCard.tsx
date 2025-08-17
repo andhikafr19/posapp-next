@@ -10,12 +10,23 @@ interface ProductCardProps {
 
 // Komponen untuk menampilkan card produk
 const ProductCard = ({ product }: ProductCardProps) => {
-  const { addToCart, getProductById, isLowStock } = useCart();
+  const { addToCart, products } = useCart();
   const [addingToCart, setAddingToCart] = useState(false);
 
   // Get current product data from context (updated stock)
-  const currentProduct = getProductById(product.id) || product;
-  const lowStock = isLowStock(product.id);
+  const currentProduct = products.find(p => p.id === product.id) || product;
+  
+  // Don't render if product is inactive
+  if (currentProduct.isActive === false) {
+    return null;
+  }
+  
+  // Helper function to check if stock is low (less than 5 items)
+  const isLowStock = (stock: number | undefined) => {
+    return stock !== undefined && stock > 0 && stock <= 5;
+  };
+  
+  const lowStock = isLowStock(currentProduct.stock);
   const outOfStock = currentProduct.stock === 0;
 
   // Format harga ke Rupiah
@@ -27,14 +38,18 @@ const ProductCard = ({ product }: ProductCardProps) => {
   };
 
   const handleAddToCart = async () => {
+    if (outOfStock) return;
+    
     setAddingToCart(true);
     
     // Add a small delay for UX
     await new Promise(resolve => setTimeout(resolve, 200));
     
-    const success = addToCart(currentProduct);
-    if (!success) {
-      // Could show a toast notification here
+    // Check if stock is available before adding
+    if (currentProduct.stock && currentProduct.stock > 0) {
+      addToCart(currentProduct);
+    } else {
+      // Show error message if no stock
       alert('Stok tidak mencukupi!');
     }
     

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { getAllCategories } from '@/data/products';
+import { getAllCategories } from '@/utils/productHelpers';
 import { useCart } from '@/contexts/CartContext';
 import ProductCard from './ProductCard';
 
@@ -11,7 +11,7 @@ const ProductGrid = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  const categories = ['Semua', ...getAllCategories()];
+  const categories = ['Semua', ...getAllCategories(products)];
   // Filter produk berdasarkan kategori dan search term
   const filteredProducts = useMemo(() => {
     let filtered = products;
