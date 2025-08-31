@@ -117,7 +117,7 @@ export class TransactionRepository {
         buyerName: newTransaction.buyer_name,
         buyerAddress: newTransaction.buyer_address,
         status: 'completed' as const,
-        createdAt: newTransaction.created_at, // Use createdAt instead of timestamp
+        createdAt: new Date(newTransaction.created_at), // Convert string to Date object
       };
     });
   }
@@ -206,7 +206,7 @@ export class TransactionRepository {
       buyerName: row.buyer_name,
       buyerAddress: row.buyer_address,
       status: 'completed' as const,
-      createdAt: row.created_at, // Use createdAt instead of timestamp
+      createdAt: new Date(row.created_at), // Convert string to Date object
     }));
   }
 
@@ -265,7 +265,7 @@ export class TransactionRepository {
       buyerName: row.buyer_name,
       buyerAddress: row.buyer_address,
       status: 'completed' as const,
-      createdAt: row.created_at,
+      createdAt: new Date(row.created_at), // Convert string to Date object
     };
   }
 

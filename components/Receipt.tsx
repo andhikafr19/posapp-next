@@ -20,16 +20,29 @@ const Receipt = ({ transaction, isOpen, onClose, onPrint }: ReceiptProps) => {
     }).format(price);
   };
 
-  // Format tanggal dan waktu
-  const formatDateTime = (date: Date) => {
-    return new Intl.DateTimeFormat('id-ID', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }).format(date);
+  // Format tanggal dan waktu dengan validasi
+  const formatDateTime = (date: Date | string) => {
+    try {
+      // Convert to Date object if it's a string
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      
+      // Check if date is valid
+      if (isNaN(dateObj.getTime())) {
+        return 'Invalid Date';
+      }
+
+      return new Intl.DateTimeFormat('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).format(dateObj);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   const handlePrint = () => {

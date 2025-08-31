@@ -33,7 +33,10 @@ const CartItemSchema = z.object({
       }
       return typeof val === 'number' ? val : 0;
     }).optional(),
-    description: z.string().optional(),
+    description: z.any().transform(val => {
+      if (val === null || val === undefined) return '';
+      return String(val);
+    }).optional(),
     category: z.string().optional(),
     stock: z.any().transform(val => {
       if (typeof val === 'string') {
