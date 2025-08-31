@@ -9,11 +9,15 @@
     "lint": "next lint",
     "db:reset": "tsx scripts/reset-simple.ts",
     "db:init": "tsx scripts/init-simple.ts",
-    "db:verify": "tsx scripts/verify-db.ts"
+    "db:verify": "tsx scripts/verify-db.ts",
+    "db:create-users": "tsx scripts/create-users-table.ts",
+    "db:init-users": "tsx scripts/init-users.ts"
   },
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "chart.js": "^4.5.0",
     "dotenv": "^17.2.1",
+    "jsonwebtoken": "^9.0.2",
     "next": "15.3.3",
     "pg": "^8.16.3",
     "react": "^19.0.0",

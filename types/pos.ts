@@ -47,3 +47,26 @@ export interface PaymentData {
   buyerName?: string;
   buyerAddress?: string;
 }
+
+export interface User {
+  id: string;
+  username: string;
+  email?: string;
+  fullName?: string;
+  role: 'admin' | 'cashier' | 'manager';
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+  lastLoginAt?: Date;
+}
+
+export interface LoginCredentials {
+  username: string;
+  password: string;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  expiresAt: Date;
+}
