@@ -29,6 +29,8 @@ export interface Transaction {
   id: string;
   receiptNumber: string;
   items: CartItem[];
+  subtotal: number;
+  discount: number;
   totalAmount: number;
   amountPaid: number;
   changeAmount: number;
@@ -36,8 +38,25 @@ export interface Transaction {
   buyerName?: string;
   buyerAddress?: string;
   status: 'pending' | 'completed' | 'cancelled';
+  discountStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  approvedBy?: string;
+  approvalTimestamp?: Date;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface DiscountApproval {
+  id: string;
+  transactionId: string;
+  adminId: string;
+  adminUsername: string;
+  discountAmount: number;
+  discountPercentage: number;
+  originalTotal: number;
+  newTotal: number;
+  status: 'approved' | 'rejected';
+  timestamp: Date;
+  notes?: string;
 }
 
 export interface PaymentData {

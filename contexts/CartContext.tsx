@@ -9,6 +9,8 @@ type CartAction =
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'CLEAR_CART' }
+  | { type: 'APPLY_DISCOUNT'; payload: { discount: number; approvalData: any } }
+  | { type: 'CLEAR_DISCOUNT' }
   | { type: 'COMPLETE_TRANSACTION'; payload: { paymentData: PaymentData; transaction: Transaction } }
   | { type: 'UPDATE_PRODUCT_STOCK'; payload: { productId: string; newStock: number } }
   | { type: 'UPDATE_PRODUCT'; payload: Product }
@@ -24,10 +26,14 @@ interface CartContextType {
   transactions: Transaction[];
   products: Product[];
   isLoading: boolean;
+  discount: number;
+  discountStatus: 'none' | 'pending' | 'approved' | 'rejected';
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
+  applyDiscount: (discount: number, approvalData: any) => void;
+  clearDiscount: () => void;
   completeTransaction: (paymentData: PaymentData) => Promise<void>;
   updateProductStock: (productId: string, newStock: number) => Promise<void>;
   updateProduct: (product: Product) => Promise<void>;
@@ -42,6 +48,9 @@ interface CartState {
   transactions: Transaction[];
   products: Product[];
   isLoading: boolean;
+  discount: number;
+  discountStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  discountApprovalData?: any;
 }
 
 // Initial state
@@ -49,7 +58,9 @@ const initialState: CartState = {
   cart: { items: [], total: 0 },
   transactions: [],
   products: [],
-  isLoading: true
+  isLoading: true,
+  discount: 0,
+  discountStatus: 'none'
 };
 
 // Utility function untuk calculate cart total
@@ -135,7 +146,26 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
     case 'CLEAR_CART':
       return {
         ...state,
-        cart: { items: [], total: 0 }
+        cart: { items: [], total: 0 },
+        discount: 0,
+        discountStatus: 'none',
+        discountApprovalData: undefined
+      };
+
+    case 'APPLY_DISCOUNT':
+      return {
+        ...state,
+        discount: action.payload.discount,
+        discountStatus: 'approved',
+        discountApprovalData: action.payload.approvalData
+      };
+
+    case 'CLEAR_DISCOUNT':
+      return {
+        ...state,
+        discount: 0,
+        discountStatus: 'none',
+        discountApprovalData: undefined
       };
 
     case 'COMPLETE_TRANSACTION':
@@ -324,17 +354,26 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Generate receipt number
       const receiptNumber = `POS-${Date.now()}`;
       
+      // Calculate subtotal and total with discount
+      const subtotal = state.cart.total;
+      const totalAmount = subtotal - state.discount;
+      
       // Create transaction object
       const transaction: Omit<Transaction, 'id' | 'createdAt'> = {
         receiptNumber,
         items: state.cart.items,
-        totalAmount: state.cart.total,
+        subtotal,
+        discount: state.discount,
+        totalAmount,
         amountPaid: paymentData.amountPaid,
         changeAmount: paymentData.changeAmount,
         paymentMethod: paymentData.paymentMethod,
         buyerName: paymentData.buyerName,
         buyerAddress: paymentData.buyerAddress,
-        status: 'completed'
+        status: 'completed',
+        discountStatus: state.discountStatus,
+        approvedBy: state.discountApprovalData?.adminId,
+        approvalTimestamp: state.discountApprovalData?.approvalTimestamp
       };
 
       // Debug logging
@@ -445,15 +484,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const applyDiscount = (discount: number, approvalData: any) => {
+    dispatch({ 
+      type: 'APPLY_DISCOUNT', 
+      payload: { discount, approvalData } 
+    });
+  };
+
+  const clearDiscount = () => {
+    dispatch({ type: 'CLEAR_DISCOUNT' });
+  };
+
   const contextValue: CartContextType = useMemo(() => ({
     cart: state.cart,
     transactions: state.transactions,
     products: state.products,
     isLoading: state.isLoading,
+    discount: state.discount,
+    discountStatus: state.discountStatus,
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
+    applyDiscount,
+    clearDiscount,
     completeTransaction,
     updateProductStock,
     updateProduct,

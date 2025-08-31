@@ -6,6 +6,7 @@ import { PaymentData, Transaction } from '@/types/pos';
 import CartItem from './CartItem';
 import PaymentModal from './PaymentModal';
 import Receipt from './Receipt';
+import MemberDiscountButton from './MemberDiscountButton';
 
 // Interface untuk toast notification
 interface Toast {
@@ -16,7 +17,15 @@ interface Toast {
 
 // Komponen Cart untuk menampilkan isi keranjang dan checkout
 const Cart = () => {
-  const { cart, clearCart, completeTransaction } = useCart();
+  const { 
+    cart, 
+    discount, 
+    discountStatus, 
+    clearCart, 
+    completeTransaction, 
+    applyDiscount, 
+    clearDiscount 
+  } = useCart();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
@@ -73,17 +82,21 @@ const Cart = () => {
       // Set the last transaction (we'll get it from the transactions array)
       // Since completeTransaction updates the transactions, we can get the latest one
       // For now, we'll create a mock transaction for the receipt
+      const totalAfterDiscount = cart.total - discount;
       const mockTransaction: Transaction = {
         id: `temp-${Date.now()}`,
         receiptNumber: `POS-${Date.now()}`,
         items: cart.items,
-        totalAmount: cart.total,
+        subtotal: cart.total,
+        discount: discount,
+        totalAmount: totalAfterDiscount,
         amountPaid: paymentData.amountPaid,
         changeAmount: paymentData.changeAmount,
         paymentMethod: paymentData.paymentMethod,
         buyerName: paymentData.buyerName,
         buyerAddress: paymentData.buyerAddress,
         status: 'completed',
+        discountStatus: discountStatus,
         createdAt: new Date()
       };
       
@@ -164,15 +177,56 @@ const Cart = () => {
         {/* Footer dengan Total dan Checkout */}
         {!isEmpty && (
           <div className="p-4 border-t border-gray-200">
-            {/* Total */}
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-lg font-semibold text-gray-800">
-                Total:
-              </span>
-              <span className="text-xl font-bold text-green-600">
-                {formatPrice(cart.total)}
-              </span>
+            {/* Subtotal, Discount, dan Total */}
+            <div className="space-y-2 mb-4">
+              {/* Subtotal */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Subtotal:</span>
+                <span className="text-sm font-medium">{formatPrice(cart.total)}</span>
+              </div>
+
+              {/* Discount (if applied) */}
+              {discount > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Diskon Member:</span>
+                  <span className="text-sm font-medium text-green-600">
+                    -{formatPrice(discount)}
+                  </span>
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                <span className="text-lg font-semibold text-gray-800">
+                  Total:
+                </span>
+                <span className="text-xl font-bold text-green-600">
+                  {formatPrice(cart.total - discount)}
+                </span>
+              </div>
             </div>
+
+            {/* Member Discount Button */}
+            <div className="mb-3">
+              <MemberDiscountButton
+                subtotal={cart.total}
+                onDiscountApproved={applyDiscount}
+                discountStatus={discountStatus}
+                disabled={cart.items.length === 0}
+              />
+            </div>
+
+            {/* Clear Discount Button (if discount is applied) */}
+            {discount > 0 && (
+              <div className="mb-3">
+                <button
+                  onClick={clearDiscount}
+                  className="w-full py-2 px-4 rounded-md font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors"
+                >
+                  🗑️ Hapus Diskon
+                </button>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="space-y-2">
@@ -235,7 +289,7 @@ const Cart = () => {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         onConfirm={handlePaymentConfirm}
-        totalAmount={cart.total}
+        totalAmount={cart.total - discount}
       />
 
       {/* Receipt Modal */}

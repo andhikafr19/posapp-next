@@ -53,3 +53,33 @@ export function validateJWTStructure(token: string): boolean {
   // Check required fields
   return !!(payload.userId && payload.username && payload.role);
 }
+
+export function verifyToken(token: string): { userId: string; username: string; role: string } | null {
+  try {
+    const parsed = parseJWT(token);
+    if (!parsed) {
+      return null;
+    }
+
+    const { payload } = parsed;
+    
+    // Check if token is expired
+    if (isTokenExpired(payload)) {
+      return null;
+    }
+
+    // Validate structure
+    if (!validateJWTStructure(token)) {
+      return null;
+    }
+
+    return {
+      userId: payload.userId,
+      username: payload.username,
+      role: payload.role
+    };
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return null;
+  }
+}
